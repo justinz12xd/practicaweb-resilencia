@@ -10,9 +10,19 @@ export class AnimalService {
     private repo: Repository<Animal>,
   ) {}
 
-  async create(data: { name: string; species: string }): Promise<Animal> {
+  async create(data: { name: string; species: string }): Promise<{ animal: Animal; isNew: boolean }> {
+    const existingAnimal = await this.repo.findOne({
+      where: { name: data.name, species: data.species },
+    });
+
+    if (existingAnimal) {
+      return { animal: existingAnimal, isNew: false };
+    }
+
+    // Si no existe, crear nuevo
     const animal = this.repo.create(data);
-    return this.repo.save(animal);
+    const savedAnimal = await this.repo.save(animal);
+    return { animal: savedAnimal, isNew: true };
   }
 
   async findAll(): Promise<Animal[]> {
@@ -24,13 +34,11 @@ export class AnimalService {
     if (!animal) throw new Error('Animal not found');
     
     if (!animal.available) {
-      console.log('⚠️ Animal ya estaba adoptado, ignorando duplicado');
-      return false;
+      return false;  // Ya estaba adoptado
     }
     
     animal.available = false;
     await this.repo.save(animal);
-    console.log('✅ Animal adoptado exitosamente');
-    return true;
+    return true;  // Adoptado exitosamente
   }
 }

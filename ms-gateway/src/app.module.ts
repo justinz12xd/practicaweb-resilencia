@@ -1,21 +1,13 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
-import { ClientsModule, Transport } from '@nestjs/microservices';
 import { AppService } from './app.service';
+import { AnimalModule } from './animal/animal.module';
+import { AdoptionModule } from './adoption/adoption.module';
 
 @Module({
   imports: [
-    ClientsModule.register([
-      {
-        name: 'ADOPTION_PUBLISHER',
-        transport: Transport.RMQ,
-        options: {
-          urls: ['amqp://guest:guest@localhost:5672'],
-          queue: 'adoption_queue',
-          queueOptions: { durable: true },
-        },
-      },
-    ]),
+    AnimalModule,
+    AdoptionModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -20,7 +20,6 @@ export class AdoptionController {
   @Post()
   async createAdoption(@Body() body: { animal_id: string; adopter_name: string }) {
     const adoption = await this.adoptionService.createAdoption(body);
-    // Notificar a ms-animal que el animal fue adoptado
     this.client.emit('adoption.created', { animal_id: body.animal_id });
     return adoption;
   }
