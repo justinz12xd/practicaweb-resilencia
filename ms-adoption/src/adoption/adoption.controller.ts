@@ -7,7 +7,7 @@ import {
   ClientProxy,
 } from '@nestjs/microservices';
 import { IdempotencyGuard } from '../idempotency/idempotency.guard';
-import { AdoptionService } from './adoption/adoption.service';
+import { AdoptionService } from './adoption.service';
 
 @Controller('adoptions')
 export class AdoptionController {
@@ -17,7 +17,6 @@ export class AdoptionController {
     @Inject('ANIMAL_SERVICE') private readonly client: ClientProxy,
   ) {}
 
-  // Endpoint HTTP POST /adoptions
   @Post()
   async createAdoption(@Body() body: { animal_id: string; adopter_name: string }) {
     const adoption = await this.adoptionService.createAdoption(body);
@@ -26,7 +25,6 @@ export class AdoptionController {
     return adoption;
   }
 
-  // Listener RabbitMQ (para mensajes internos)
   @EventPattern('adoption.request')
   async handle(@Payload() payload: any, @Ctx() context: RmqContext) {
     console.log('📥 Procesando adoption.request...');
