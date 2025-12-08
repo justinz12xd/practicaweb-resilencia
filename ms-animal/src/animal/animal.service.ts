@@ -23,7 +23,6 @@ export class AnimalService {
     const animal = await this.repo.findOneBy({ id: animalId });
     if (!animal) throw new Error('Animal not found');
     
-    // Idempotencia: si ya está adoptado, no hacer nada
     if (!animal.available) {
       console.log('⚠️ Animal ya estaba adoptado, ignorando duplicado');
       return false;
