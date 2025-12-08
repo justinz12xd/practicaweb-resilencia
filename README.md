@@ -11,48 +11,61 @@ graph TD
 
     %% --- GRUPO 2: SISTEMA INTERNO (Microservicios) ---
     subgraph SYSTEM ["🏠 Sistema de Adopción (NestJS)"]
-        GW["🌐 API Gateway<br/>Puerto: 3000"]
+        subgraph GW_GROUP ["🌐 API Gateway - Puerto 3000"]
+            GW_ANIMAL["AnimalController<br/>POST /animals"]
+            GW_ADOPT["AdoptionController<br/>POST /adoptions"]
+        end
         MS_ADOP["📝 MS Adoption<br/>Puerto: 3002"]
         MS_ANI["🐾 MS Animal<br/>Puerto: 3001"]
     end
 
     %% --- GRUPO 3: INFRAESTRUCTURA EXTERNA ---
     subgraph INFRA ["🏗️ Infraestructura & Datos"]
-        RABBIT["🐇 RabbitMQ<br/>Broker de Mensajes"]
-        REDIS["⚡ Redis<br/>Cache Idempotencia"]
-        DB_ADOP["💾 PostgreSQL<br/>DB Adopciones"]
-        DB_ANI["💾 PostgreSQL<br/>DB Animales"]
+        subgraph QUEUES ["🐇 RabbitMQ - Colas"]
+            Q_ANIMAL["animal_queue"]
+            Q_ADOPT["adoption_queue"]
+        end
+        DB_ADOP["💾 PostgreSQL<br/>adoption_db:5433"]
+        DB_ANI["💾 PostgreSQL<br/>animal_db:5434"]
     end
 
     %% --- RELACIONES ---
     
     %% Flujo del Usuario
-    U1 -- "HTTP POST" --> GW
+    U1 -- "POST /animals" --> GW_ANIMAL
+    U1 -- "POST /adoptions" --> GW_ADOPT
 
-    %% Flujo del Gateway a la Cola
-    GW -- "Publica: adoption.request" --> RABBIT
+    %% Gateway publica a colas
+    GW_ANIMAL -- "emit: animal.create" --> Q_ANIMAL
+    GW_ADOPT -- "emit: adoption.request" --> Q_ADOPT
 
-    %% Consumo de Mensajes (Async)
-    RABBIT -.->|Consume| MS_ADOP
-    RABBIT -.->|Consume| MS_ANI
+    %% MS Animal consume de animal_queue
+    Q_ANIMAL -.->|"@EventPattern<br/>animal.create"| MS_ANI
+    Q_ANIMAL -.->|"@EventPattern<br/>adoption.created"| MS_ANI
 
-    %% Persistencia MS Adoption
-    MS_ADOP -->|Lee/Escribe| DB_ADOP
-    MS_ADOP -->|Guarda Key| REDIS
-    MS_ADOP -- "Publica: adoption.created" --> RABBIT
+    %% MS Adoption consume de adoption_queue
+    Q_ADOPT -.->|"@EventPattern<br/>adoption.request"| MS_ADOP
 
-    %% Persistencia MS Animal
-    MS_ANI -->|Actualiza Estado| DB_ANI
+    %% MS Adoption publica a animal_queue
+    MS_ADOP -- "emit: adoption.created" --> Q_ANIMAL
+
+    %% Persistencia
+    MS_ADOP -->|"Idempotency + Adopción"| DB_ADOP
+    MS_ANI -->|"CRUD + Estado"| DB_ANI
 
     %% --- ESTILOS ---
     classDef userStyle fill:#8e44ad,stroke:#6c3483,stroke-width:2px,color:#fff
+    classDef gatewayStyle fill:#e67e22,stroke:#d35400,stroke-width:2px,color:#fff
     classDef systemStyle fill:#2980b9,stroke:#1f618d,stroke-width:2px,color:#fff
-    classDef infraStyle fill:#27ae60,stroke:#229954,stroke-width:2px,color:#fff
+    classDef queueStyle fill:#e74c3c,stroke:#c0392b,stroke-width:2px,color:#fff
+    classDef dbStyle fill:#27ae60,stroke:#229954,stroke-width:2px,color:#fff
 
     %% Asignación de estilos
     class U1 userStyle
-    class GW,MS_ADOP,MS_ANI systemStyle
-    class RABBIT,REDIS,DB_ADOP,DB_ANI infraStyle
+    class GW_ANIMAL,GW_ADOPT gatewayStyle
+    class MS_ADOP,MS_ANI systemStyle
+    class Q_ANIMAL,Q_ADOPT queueStyle
+    class DB_ADOP,DB_ANI dbStyle
 ```
 
 ## Descripción de Componentes
@@ -60,60 +73,79 @@ graph TD
 ### 1. **API Gateway** (Puerto 3000)
 - **Responsabilidad**: Punto de entrada HTTP para clientes externos
 - **Tecnología**: NestJS con ClientProxy de RabbitMQ
-- **Función**: Recibe solicitudes de adopción y las publica como eventos en RabbitMQ
+- **Estructura Modular**:
+  - `AnimalModule` → `AnimalController` → `POST /animals`
+  - `AdoptionModule` → `AdoptionController` → `POST /adoptions`
+- **Función**: Recibe solicitudes HTTP y las publica como eventos en RabbitMQ
 
 ### 2. **MS Adoption** (Puerto 3002)
 - **Responsabilidad**: Gestión de adopciones con garantía de idempotencia
-- **Tecnología**: NestJS + TypeORM + Redis
-- **Componentes**:
-  - **Idempotency Guard**: Previene procesamiento duplicado usando Redis
-  - **Adoption Service**: Lógica de negocio para crear adopciones
+- **Tecnología**: NestJS + TypeORM + PostgreSQL
+- **Estructura**:
+  - `adoption/` → Controlador, Servicio y Entidad de Adopción
+  - `idempotency/` → Guard, Service y Entity para control de duplicados
 - **Base de Datos**: PostgreSQL (adoption_db) en puerto 5433
 - **Eventos**: 
   - Consume: `adoption.request` desde `adoption_queue`
   - Publica: `adoption.created` hacia `animal_queue`
 
 ### 3. **MS Animal** (Puerto 3001)
-- **Responsabilidad**: Gestión del estado de animales
+- **Responsabilidad**: Gestión del ciclo de vida de animales
 - **Tecnología**: NestJS + TypeORM
-- **Función**: Marca animales como adoptados cuando recibe eventos
+- **Estructura**:
+  - `animal/` → Consumer, Service y Entity
+- **Funciones**:
+  - Crear animales nuevos (con idempotencia por nombre+especie)
+  - Marcar animales como adoptados
 - **Base de Datos**: PostgreSQL (animal_db) en puerto 5434
 - **Eventos**: 
-  - Consume: `adoption.created` desde `animal_queue`
+  - Consume: `animal.create` desde `animal_queue` (creación)
+  - Consume: `adoption.created` desde `animal_queue` (actualización estado)
 
 ### 4. **RabbitMQ** (Puertos 5672, 15672)
 - **Responsabilidad**: Message broker para comunicación asíncrona
 - **Colas**:
-  - `adoption_queue`: Para eventos de solicitud de adopción
-  - `animal_queue`: Para notificaciones de adopción creada
+  - `adoption_queue`: Para eventos `adoption.request`
+  - `animal_queue`: Para eventos `animal.create` y `adoption.created`
+- **Características**: ACK manual, colas durables
 
-### 5. **Redis** (Puerto 6379)
-- **Responsabilidad**: Cache distribuido para control de idempotencia
-- **Uso**: Almacena message_id procesados para evitar duplicados
+### 5. **PostgreSQL**
+- **adoption_db** (Puerto 5433): Almacena adopciones + tabla de idempotencia
+- **animal_db** (Puerto 5434): Almacena información y estado de animales
 
-### 6. **PostgreSQL**
-- **adoption_db** (Puerto 5433): Almacena registros de adopciones e idempotencia
-- **animal_db** (Puerto 5434): Almacena información de animales
+## Flujos del Sistema
 
-## Flujo de Adopción
+### Flujo 1: Crear Animal
+1. **Usuario** envía `POST /animals` con `{name, species}` al **Gateway**
+2. **Gateway** (AnimalController) genera UUID y publica `animal.create` en `animal_queue`
+3. **MS Animal** consume el evento
+4. Verifica idempotencia (nombre+especie únicos)
+5. Si es nuevo → crea animal en PostgreSQL
+6. ACK del mensaje
 
+### Flujo 2: Solicitar Adopción
 1. **Usuario** envía `POST /adoptions` con `{animal_id, adopter_name}` al **Gateway**
-2. **Gateway** genera un UUID único y publica evento `adoption.request` en RabbitMQ
-3. **MS Adoption** consume el evento desde `adoption_queue`
-4. **Idempotency Guard** verifica en Redis si el mensaje ya fue procesado
+2. **Gateway** (AdoptionController) genera UUID y publica `adoption.request` en `adoption_queue`
+3. **MS Adoption** consume el evento
+4. **IdempotencyGuard** verifica si el message_id ya fue procesado
 5. Si es nuevo:
-   - Crea el registro de adopción en PostgreSQL
-   - Guarda el message_id en Redis
-   - Publica evento `adoption.created`
-6. **MS Animal** consume el evento desde `animal_queue`
-7. **MS Animal** actualiza el estado del animal a "adoptado" en su base de datos
+   - Guarda message_id en tabla de idempotencia
+   - Crea registro de adopción en PostgreSQL
+   - Publica `adoption.created` hacia `animal_queue`
+6. **MS Animal** consume `adoption.created`
+7. Verifica si el animal ya está adoptado (idempotencia)
+8. Si no → actualiza estado a "adoptado"
+9. ACK del mensaje
 
 ## Características Clave
 
-- ✅ **Idempotencia**: Previene procesamiento duplicado mediante Redis
+- ✅ **Idempotencia Multinivel**: 
+  - En MS Adoption: Por message_id (tabla idempotency)
+  - En MS Animal: Por lógica de negocio (estado del animal)
 - ✅ **Comunicación Asíncrona**: Desacoplamiento mediante RabbitMQ
-- ✅ **Separación de Responsabilidades**: Cada microservicio con su propia base de datos
-- ✅ **Confirmación de Mensajes**: ACK manual para garantizar procesamiento
+- ✅ **Gateway Modular**: Controladores separados por dominio
+- ✅ **Separación de Responsabilidades**: Cada microservicio con su propia BD
+- ✅ **ACK Manual**: Garantiza procesamiento completo antes de confirmar
 - ✅ **Event-Driven Architecture**: Comunicación basada en eventos de dominio
 
 ## Tecnologías Utilizadas
@@ -122,9 +154,18 @@ graph TD
 - **Lenguaje**: TypeScript
 - **Message Broker**: RabbitMQ 3.11
 - **Base de Datos**: PostgreSQL 17
-- **Cache**: Redis 7
 - **ORM**: TypeORM
 - **Containerización**: Docker Compose
+
+## Endpoints
+
+- **Gateway**: http://localhost:3000
+  - `POST /animals` - Crear animal
+  - `POST /adoptions` - Solicitar adopción
+- **MS Animal**: http://localhost:3001
+  - `GET /animals` - Listar animales
+- **MS Adoption**: http://localhost:3002
+- **RabbitMQ Management**: http://localhost:15672 (guest/guest)
 
 ## Ejecución
 
@@ -132,21 +173,30 @@ graph TD
 # Levantar infraestructura
 docker-compose up -d
 
-# Instalar dependencias
+# Instalar dependencias (en cada microservicio)
 cd ms-gateway && npm install
 cd ms-adoption && npm install
 cd ms-animal && npm install
 
-# Ejecutar microservicios
-cd ms-gateway && npm run start:dev
-cd ms-adoption && npm run start:dev
-cd ms-animal && npm run start:dev
+# Ejecutar microservicios (cada uno en terminal separada)
+cd ms-gateway && npm run start:dev    # Puerto 3000
+cd ms-adoption && npm run start:dev   # Puerto 3002
+cd ms-animal && npm run start:dev     # Puerto 3001
 ```
 
-## Endpoints
+## Pruebas
 
-- **Gateway**: http://localhost:3000
-  - `POST /adoptions` - Solicitar adopción
-- **MS Adoption**: http://localhost:3002
-- **MS Animal**: http://localhost:3001
-- **RabbitMQ Management**: http://localhost:15672 (guest/guest)
+```bash
+# Crear un animal
+curl -X POST http://localhost:3000/animals \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Luna", "species": "Perro"}'
+
+# Solicitar adopción
+curl -X POST http://localhost:3000/adoptions \
+  -H "Content-Type: application/json" \
+  -d '{"animal_id": "<UUID_DEL_ANIMAL>", "adopter_name": "Juan"}'
+
+# Ver animales
+curl http://localhost:3001/animals
+```
