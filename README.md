@@ -3,152 +3,56 @@
 ## Diagrama C4 - Nivel 1: Contexto del Sistema
 
 ```mermaid
-C4Context
-    title Sistema de Adopción de Animales - Contexto del Sistema
+graph TD
+    %% --- GRUPO 1: USUARIOS ---
+    subgraph USERS ["👥 Usuarios"]
+        U1["👤 Solicitante<br/>Busca adoptar mascota"]
+    end
 
-    Person(user, "Usuario", "Cliente que realiza solicitudes de adopción")
+    %% --- GRUPO 2: SISTEMA INTERNO (Microservicios) ---
+    subgraph SYSTEM ["🏠 Sistema de Adopción (NestJS)"]
+        GW["🌐 API Gateway<br/>Puerto: 3000"]
+        MS_ADOP["📝 MS Adoption<br/>Puerto: 3002"]
+        MS_ANI["🐾 MS Animal<br/>Puerto: 3001"]
+    end
+
+    %% --- GRUPO 3: INFRAESTRUCTURA EXTERNA ---
+    subgraph INFRA ["🏗️ Infraestructura & Datos"]
+        RABBIT["🐇 RabbitMQ<br/>Broker de Mensajes"]
+        REDIS["⚡ Redis<br/>Cache Idempotencia"]
+        DB_ADOP["💾 PostgreSQL<br/>DB Adopciones"]
+        DB_ANI["💾 PostgreSQL<br/>DB Animales"]
+    end
+
+    %% --- RELACIONES ---
     
-    System_Boundary(sistema, "Sistema de Adopción") {
-        Container(gateway, "API Gateway", "NestJS:3000", "Punto de entrada HTTP para solicitudes externas")
-        Container(msAdoption, "MS Adoption", "NestJS:3002", "Gestiona adopciones con idempotencia")
-        Container(msAnimal, "MS Animal", "NestJS:3001", "Gestiona estado de animales")
-    }
-    
-    System_Ext(rabbitmq, "RabbitMQ", "Message Broker para comunicación asíncrona")
-    System_Ext(redis, "Redis", "Cache distribuido")
-    System_Ext(pgAdoption, "PostgreSQL Adoption", ":5433", "Base de datos de adopciones")
-    System_Ext(pgAnimal, "PostgreSQL Animal", ":5434", "Base de datos de animales")
+    %% Flujo del Usuario
+    U1 -- "HTTP POST" --> GW
 
-    Rel(user, gateway, "Solicita adopción", "HTTP POST")
-    Rel(gateway, rabbitmq, "Publica evento", "adoption.request")
-    Rel(rabbitmq, msAdoption, "Consume evento", "adoption_queue")
-    Rel(msAdoption, pgAdoption, "Lee/Escribe", "TypeORM")
-    Rel(msAdoption, rabbitmq, "Publica evento", "adoption.created")
-    Rel(rabbitmq, msAnimal, "Consume evento", "animal_queue")
-    Rel(msAnimal, pgAnimal, "Actualiza estado", "TypeORM")
-    Rel(msAdoption, redis, "Almacena idempotencia", "Cache")
+    %% Flujo del Gateway a la Cola
+    GW -- "Publica: adoption.request" --> RABBIT
 
-    UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")
-```
+    %% Consumo de Mensajes (Async)
+    RABBIT -.->|Consume| MS_ADOP
+    RABBIT -.->|Consume| MS_ANI
 
-## Diagrama de Flujo Detallado
+    %% Persistencia MS Adoption
+    MS_ADOP -->|Lee/Escribe| DB_ADOP
+    MS_ADOP -->|Guarda Key| REDIS
+    MS_ADOP -- "Publica: adoption.created" --> RABBIT
 
-```mermaid
-sequenceDiagram
-    participant U as Usuario
-    participant GW as API Gateway<br/>(Puerto 3000)
-    participant RMQ as RabbitMQ
-    participant MSA as MS Adoption<br/>(Puerto 3002)
-    participant Redis as Redis Cache
-    participant DBA as PostgreSQL<br/>Adoption DB
-    participant MSAn as MS Animal<br/>(Puerto 3001)
-    participant DBN as PostgreSQL<br/>Animal DB
+    %% Persistencia MS Animal
+    MS_ANI -->|Actualiza Estado| DB_ANI
 
-    U->>GW: POST /adoptions<br/>{animal_id, adopter_name}
-    activate GW
-    GW->>GW: Genera UUID mensaje
-    GW->>RMQ: Publica evento<br/>adoption.request
-    GW-->>U: {status: PUBLISHED, message_id}
-    deactivate GW
+    %% --- ESTILOS ---
+    classDef userStyle fill:#8e44ad,stroke:#6c3483,stroke-width:2px,color:#fff
+    classDef systemStyle fill:#2980b9,stroke:#1f618d,stroke-width:2px,color:#fff
+    classDef infraStyle fill:#27ae60,stroke:#229954,stroke-width:2px,color:#fff
 
-    RMQ->>MSA: Consume adoption_queue
-    activate MSA
-    MSA->>Redis: Verifica idempotencia<br/>(message_id)
-    alt Primera vez
-        Redis-->>MSA: No existe
-        MSA->>DBA: INSERT adoption
-        MSA->>Redis: Guarda message_id
-        MSA->>RMQ: Publica adoption.created
-        MSA->>RMQ: ACK mensaje
-    else Ya procesado
-        Redis-->>MSA: Ya existe
-        MSA->>RMQ: ACK mensaje (skip)
-    end
-    deactivate MSA
-
-    RMQ->>MSAn: Consume animal_queue
-    activate MSAn
-    MSAn->>DBN: UPDATE animal<br/>SET adopted = true
-    MSAn->>RMQ: ACK mensaje
-    deactivate MSAn
-```
-
-## Arquitectura de Componentes
-
-```mermaid
-graph TB
-    subgraph "Cliente"
-        Client[Cliente HTTP]
-    end
-
-    subgraph "API Layer"
-        GW[MS Gateway<br/>Port 3000<br/>HTTP Server]
-    end
-
-    subgraph "Message Broker"
-        RMQ[RabbitMQ<br/>Port 5672]
-        Q1[adoption_queue]
-        Q2[animal_queue]
-        RMQ --> Q1
-        RMQ --> Q2
-    end
-
-    subgraph "Business Logic Layer"
-        MSA[MS Adoption<br/>Port 3002<br/>HTTP + RMQ Consumer]
-        MSAn[MS Animal<br/>Port 3001<br/>HTTP + RMQ Consumer]
-        
-        subgraph "MS Adoption Components"
-            IG[Idempotency Guard]
-            AS[Adoption Service]
-        end
-        
-        MSA --> IG
-        MSA --> AS
-    end
-
-    subgraph "Data Layer"
-        Redis[(Redis Cache<br/>Port 6379)]
-        PGA[(PostgreSQL<br/>adoption_db<br/>Port 5433)]
-        PGN[(PostgreSQL<br/>animal_db<br/>Port 5434)]
-    end
-
-    Client -->|POST /adoptions| GW
-    GW -->|emit adoption.request| RMQ
-    Q1 -->|consume| MSA
-    MSA -->|check/store| Redis
-    MSA -->|CRUD| PGA
-    MSA -->|emit adoption.created| RMQ
-    Q2 -->|consume| MSAn
-    MSAn -->|UPDATE| PGN
-
-    style GW fill:#e1f5ff
-    style MSA fill:#fff4e1
-    style MSAn fill:#e8f5e9
-    style RMQ fill:#f3e5f5
-    style Redis fill:#ffebee
-    style PGA fill:#e0f2f1
-    style PGN fill:#e0f2f1
-```
-
-## Patrones de Resiliencia Implementados
-
-```mermaid
-mindmap
-  root((Resiliencia))
-    Idempotencia
-      Message ID único
-      Redis Cache
-      Validación duplicados
-    Mensajería Asíncrona
-      RabbitMQ
-      Colas durables
-      ACK manual
-    Separación de Datos
-      DB por microservicio
-      PostgreSQL isolation
-    Event Driven
-      Desacoplamiento
-      Eventos de dominio
+    %% Asignación de estilos
+    class U1 userStyle
+    class GW,MS_ADOP,MS_ANI systemStyle
+    class RABBIT,REDIS,DB_ADOP,DB_ANI infraStyle
 ```
 
 ## Descripción de Componentes
