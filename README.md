@@ -1,71 +1,159 @@
 # Sistema de Adopción de Animales - Arquitectura de Microservicios
 
-## Diagrama C4 - Nivel 1: Contexto del Sistema
+## Diagrama de Arquitectura
 
 ```mermaid
-graph TD
-    %% --- GRUPO 1: USUARIOS ---
+graph TB
+    %% --- USUARIOS ---
     subgraph USERS ["👥 Usuarios"]
-        U1["👤 Solicitante<br/>Busca adoptar mascota"]
+        U1["👤 Cliente HTTP"]
     end
 
-    %% --- GRUPO 2: SISTEMA INTERNO (Microservicios) ---
-    subgraph SYSTEM ["🏠 Sistema de Adopción (NestJS)"]
-        subgraph GW_GROUP ["🌐 API Gateway - Puerto 3000"]
-            GW_ANIMAL["AnimalController<br/>POST /animals"]
-            GW_ADOPT["AdoptionController<br/>POST /adoptions"]
-        end
-        MS_ADOP["📝 MS Adoption<br/>Puerto: 3002"]
-        MS_ANI["🐾 MS Animal<br/>Puerto: 3001"]
+    %% --- API GATEWAY ---
+    subgraph GATEWAY ["🌐 ms-gateway :3000"]
+        direction TB
+        GW_APP["AppModule"]
+        GW_ANIMAL["AnimalModule<br/>POST /animals"]
+        GW_ADOPT["AdoptionModule<br/>POST /adoptions"]
     end
 
-    %% --- GRUPO 3: INFRAESTRUCTURA EXTERNA ---
-    subgraph INFRA ["🏗️ Infraestructura & Datos"]
-        subgraph QUEUES ["🐇 RabbitMQ - Colas"]
-            Q_ANIMAL["animal_queue"]
-            Q_ADOPT["adoption_queue"]
-        end
-        DB_ADOP["💾 PostgreSQL<br/>adoption_db:5433"]
-        DB_ANI["💾 PostgreSQL<br/>animal_db:5434"]
+    %% --- RABBITMQ ---
+    subgraph RABBIT ["🐇 RabbitMQ :5672"]
+        Q_ANIMAL["📬 animal_queue"]
+        Q_ADOPT["📬 adoption_queue"]
     end
 
-    %% --- RELACIONES ---
+    %% --- MS ADOPTION ---
+    subgraph MS_ADOPTION ["📝 ms-adoption :3002"]
+        direction TB
+        ADOPT_CTRL["AdoptionController<br/>@EventPattern"]
+        ADOPT_SVC["AdoptionService"]
+        IDEMP_GUARD["IdempotencyGuard"]
+    end
+
+    %% --- MS ANIMAL ---
+    subgraph MS_ANIMAL ["🐾 ms-animal :3001"]
+        direction TB
+        ANI_CONSUMER["AnimalConsumer<br/>@EventPattern"]
+        ANI_SVC["AnimalService"]
+        ANI_CTRL["AppController<br/>GET /animals"]
+    end
+
+    %% --- INFRAESTRUCTURA ---
+    subgraph INFRA ["🏗️ Infraestructura"]
+        REDIS["⚡ Redis :6379<br/>Cache Idempotencia"]
+        DB_ADOPT["💾 PostgreSQL :5433<br/>adoption_db"]
+        DB_ANIMAL["💾 PostgreSQL :5434<br/>animal_db"]
+    end
+
+    %% --- FLUJOS ---
     
-    %% Flujo del Usuario
-    U1 -- "POST /animals" --> GW_ANIMAL
-    U1 -- "POST /adoptions" --> GW_ADOPT
+    %% Usuario al Gateway
+    U1 -->|"HTTP"| GATEWAY
 
-    %% Gateway publica a colas
-    GW_ANIMAL -- "emit: animal.create" --> Q_ANIMAL
-    GW_ADOPT -- "emit: adoption.request" --> Q_ADOPT
+    %% Gateway a RabbitMQ
+    GW_ANIMAL -->|"emit('animal.create')"| Q_ANIMAL
+    GW_ADOPT -->|"emit('adoption.request')"| Q_ADOPT
 
-    %% MS Animal consume de animal_queue
-    Q_ANIMAL -.->|"@EventPattern<br/>animal.create"| MS_ANI
-    Q_ANIMAL -.->|"@EventPattern<br/>adoption.created"| MS_ANI
+    %% RabbitMQ a Microservicios
+    Q_ADOPT -.->|"consume"| ADOPT_CTRL
+    Q_ANIMAL -.->|"consume"| ANI_CONSUMER
 
-    %% MS Adoption consume de adoption_queue
-    Q_ADOPT -.->|"@EventPattern<br/>adoption.request"| MS_ADOP
+    %% Flujo interno MS Adoption
+    ADOPT_CTRL --> IDEMP_GUARD
+    IDEMP_GUARD -->|"SETNX"| REDIS
+    IDEMP_GUARD --> ADOPT_SVC
+    ADOPT_SVC -->|"INSERT"| DB_ADOPT
+    ADOPT_SVC -->|"emit('adoption.created')"| Q_ANIMAL
 
-    %% MS Adoption publica a animal_queue
-    MS_ADOP -- "emit: adoption.created" --> Q_ANIMAL
+    %% Flujo interno MS Animal
+    ANI_CONSUMER --> ANI_SVC
+    ANI_SVC -->|"CRUD"| DB_ANIMAL
 
-    %% Persistencia
-    MS_ADOP -->|"Idempotency + Adopción"| DB_ADOP
-    MS_ANI -->|"CRUD + Estado"| DB_ANI
+    %% Usuario consulta animales
+    U1 -->|"GET /animals"| ANI_CTRL
+    ANI_CTRL --> ANI_SVC
 
     %% --- ESTILOS ---
-    classDef userStyle fill:#8e44ad,stroke:#6c3483,stroke-width:2px,color:#fff
-    classDef gatewayStyle fill:#e67e22,stroke:#d35400,stroke-width:2px,color:#fff
-    classDef systemStyle fill:#2980b9,stroke:#1f618d,stroke-width:2px,color:#fff
-    classDef queueStyle fill:#e74c3c,stroke:#c0392b,stroke-width:2px,color:#fff
-    classDef dbStyle fill:#27ae60,stroke:#229954,stroke-width:2px,color:#fff
+    classDef gateway fill:#e67e22,stroke:#d35400,stroke-width:2px,color:#fff
+    classDef microservice fill:#3498db,stroke:#2980b9,stroke-width:2px,color:#fff
+    classDef queue fill:#e74c3c,stroke:#c0392b,stroke-width:2px,color:#fff
+    classDef db fill:#27ae60,stroke:#229954,stroke-width:2px,color:#fff
+    classDef cache fill:#9b59b6,stroke:#8e44ad,stroke-width:2px,color:#fff
 
-    %% Asignación de estilos
-    class U1 userStyle
-    class GW_ANIMAL,GW_ADOPT gatewayStyle
-    class MS_ADOP,MS_ANI systemStyle
-    class Q_ANIMAL,Q_ADOPT queueStyle
-    class DB_ADOP,DB_ANI dbStyle
+    class GATEWAY gateway
+    class MS_ADOPTION,MS_ANIMAL microservice
+    class Q_ANIMAL,Q_ADOPT queue
+    class DB_ADOPT,DB_ANIMAL db
+    class REDIS cache
+```
+
+## Diagrama de Secuencia - Flujo de Adopción
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as 👤 Usuario
+    participant GW as 🌐 Gateway
+    participant RMQ as 🐇 RabbitMQ
+    participant ADOPT as 📝 ms-adoption
+    participant REDIS as ⚡ Redis
+    participant DB_A as 💾 adoption_db
+    participant ANI as 🐾 ms-animal
+    participant DB_N as 💾 animal_db
+
+    U->>GW: POST /adoptions {animal_id, adopter_name}
+    GW->>GW: Genera message_id (UUID)
+    GW-->>U: 202 Accepted {message_id}
+    GW->>RMQ: emit('adoption.request', {message_id, data})
+    
+    RMQ->>ADOPT: consume mensaje
+    ADOPT->>REDIS: SET idempotency:{message_id} NX EX 86400
+    
+    alt Mensaje Nuevo (OK)
+        REDIS-->>ADOPT: OK
+        ADOPT->>DB_A: INSERT adoption
+        ADOPT->>RMQ: emit('adoption.created', {animal_id})
+        RMQ->>ANI: consume mensaje
+        ANI->>DB_N: UPDATE animal SET adopted=true
+        ANI->>RMQ: ACK ✓
+    else Mensaje Duplicado (null)
+        REDIS-->>ADOPT: null
+        ADOPT->>ADOPT: Ignorar (ya procesado)
+    end
+    
+    ADOPT->>RMQ: ACK ✓
+```
+
+## Diagrama de Secuencia - Crear Animal
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as 👤 Usuario
+    participant GW as 🌐 Gateway
+    participant RMQ as 🐇 RabbitMQ
+    participant ANI as 🐾 ms-animal
+    participant DB as 💾 animal_db
+
+    U->>GW: POST /animals {name, species}
+    GW->>GW: Genera message_id (UUID)
+    GW-->>U: 202 Accepted {message_id}
+    GW->>RMQ: emit('animal.create', {message_id, data})
+    
+    RMQ->>ANI: consume mensaje
+    ANI->>DB: SELECT * WHERE name AND species
+    
+    alt Animal No Existe
+        DB-->>ANI: null
+        ANI->>DB: INSERT animal
+        ANI-->>ANI: ✅ Animal creado
+    else Animal Ya Existe
+        DB-->>ANI: animal
+        ANI-->>ANI: ⚠️ Idempotencia aplicada
+    end
+    
+    ANI->>RMQ: ACK ✓
 ```
 
 ## Descripción de Componentes

@@ -7,11 +7,11 @@ import { AdoptionController } from './adoption/adoption.controller';
 import { AdoptionService } from './adoption/adoption.service';
 import { Adoption } from './adoption/adoption.entity';
 import { IdempotencyGuard } from './idempotency/idempotency.guard';
-import { IdempotencyService } from './idempotency/idempotency.service';
-import { Idempotency } from './idempotency/idempotency.entity';
+import { RedisModule } from './redis/redis.module';
 
 @Module({
   imports: [
+    RedisModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: 'localhost',
@@ -19,10 +19,10 @@ import { Idempotency } from './idempotency/idempotency.entity';
       username: 'pguser',
       password: 'pgpass',
       database: 'adoption_db',
-      entities: [Adoption, Idempotency],
+      entities: [Adoption],
       synchronize: true,
     }),
-    TypeOrmModule.forFeature([Adoption, Idempotency]),
+    TypeOrmModule.forFeature([Adoption]),
     ClientsModule.register([
       {
         name: 'ANIMAL_SERVICE',
@@ -36,6 +36,6 @@ import { Idempotency } from './idempotency/idempotency.entity';
     ]),
   ],
   controllers: [AppController, AdoptionController],
-  providers: [AppService, AdoptionService, IdempotencyGuard, IdempotencyService],
+  providers: [AppService, AdoptionService, IdempotencyGuard],
 })
 export class AppModule {}

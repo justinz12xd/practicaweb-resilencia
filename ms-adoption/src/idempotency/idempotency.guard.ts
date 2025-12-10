@@ -1,18 +1,19 @@
 import { Injectable } from '@nestjs/common';
-import { IdempotencyService } from './idempotency.service';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class IdempotencyGuard {
-  constructor(private readonly idemp: IdempotencyService) {}
+  constructor(private readonly redis: RedisService) {}
 
   async run(messageId: string, handler: () => Promise<any>) {
-    const canProcess = await this.idemp.tryRegister(messageId);
+    const isNew = await this.redis.tryRegister(messageId);
 
-    if (!canProcess) {
-      console.log(`[IDEMP] Mensaje duplicado ignorado: ${messageId}`);
+    if (!isNew) {
+      console.log(`⚠️ [REDIS IDEMP] Mensaje duplicado ignorado: ${messageId}`);
       return;
     }
 
+    console.log(`✅ [REDIS IDEMP] Procesando mensaje nuevo: ${messageId}`);
     await handler();
   }
 }
