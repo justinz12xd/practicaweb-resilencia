@@ -57,7 +57,8 @@ serve(async (req) => {
       .from('processed_webhooks')
       .select('event_id')
       .eq('event_id', eventId)
-      .single();
+      .eq('processor', 'webhook-event-logger')
+      .maybeSingle();
 
     if (existing) {
       console.log('⚠️ Evento ya procesado:', eventId);

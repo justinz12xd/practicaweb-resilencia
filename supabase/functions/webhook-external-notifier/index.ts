@@ -52,7 +52,7 @@ serve(async (req) => {
       .select('event_id')
       .eq('event_id', eventId)
       .eq('processor', 'webhook-external-notifier')
-      .single();
+      .maybeSingle();
 
     if (existing) {
       console.log('⚠️ Ya notificado:', eventId);
