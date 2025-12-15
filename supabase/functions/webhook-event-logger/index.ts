@@ -1,15 +1,11 @@
-// supabase/functions/webhook-event-logger/index.ts
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { timingSafeEqual } from 'https://deno.land/std@0.168.0/crypto/timing_safe_equal.ts';
 
 const WEBHOOK_SECRET = Deno.env.get('WEBHOOK_SECRET')!;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 serve(async (req) => {
-  // Solo aceptar POST
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
@@ -137,9 +133,6 @@ serve(async (req) => {
   }
 });
 
-/**
- * Genera firma HMAC-SHA256
- */
 async function generateSignature(payload: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
   const keyData = encoder.encode(secret);
@@ -159,10 +152,6 @@ async function generateSignature(payload: string, secret: string): Promise<strin
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
 }
-
-/**
- * Comparación timing-safe de strings
- */
 function timingSafeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   

@@ -50,10 +50,8 @@ export class WebhookPublisherService {
       event_type: event.event_type,
     });
 
-    // 1. Guardar el evento en la BD (auditoría)
     await this.saveEvent(event);
 
-    // 2. Buscar suscriptores activos para este tipo de evento
     const subscriptions = await this.subscriptionRepo.find({
       where: {
         event_type: event.event_type,
@@ -63,15 +61,11 @@ export class WebhookPublisherService {
 
     console.log(`📋 ${subscriptions.length} suscriptores encontrados`);
 
-    // 3. Enviar webhook a cada suscriptor
     for (const subscription of subscriptions) {
       await this.sendWebhook(subscription, event, 1);
     }
   }
 
-  /**
-   * Guarda el evento en la tabla webhook_events
-   */
   private async saveEvent(event: WebhookEvent): Promise<void> {
     await this.eventRepo.save({
       event_id: event.event_id,
@@ -80,10 +74,6 @@ export class WebhookPublisherService {
     });
   }
 
-  /**
-   * Envía un webhook a un suscriptor específico
-   * Maneja reintentos automáticamente
-   */
   private async sendWebhook(
     subscription: WebhookSubscription,
     event: WebhookEvent,
@@ -91,7 +81,6 @@ export class WebhookPublisherService {
   ): Promise<void> {
     console.log(`🔄 Intento ${attempt}/6 para suscripción ${subscription.id}`);
 
-    // 1. Crear registro de entrega
     const delivery = new WebhookDelivery();
     delivery.subscription_id = subscription.id;
     delivery.event_id = event.event_id;
@@ -136,33 +125,21 @@ export class WebhookPublisherService {
 
       // 6. Decidir si reintentar o enviar a DLQ
       if (attempt < 6) {
-        // Calcular delay con backoff exponencial
-        // Intento 1: 2s, 2: 4s, 3: 8s, 4: 16s, 5: 32s, 6: 64s
-        const delay = Math.pow(2, attempt) * 1000;
+                const delay = Math.pow(2, attempt) * 1000;
         
         console.log(`⏳ Reintentando en ${delay / 1000}s...`);
 
-        // Programar reintento
         setTimeout(() => {
           this.sendWebhook(subscription, event, attempt + 1);
         }, delay);
 
       } else {
-        // 7. Después de 6 intentos → Dead Letter Queue
         console.log(`☠️ Máximo de reintentos alcanzado, enviando a DLQ`);
         await this.sendToDLQ(event, subscription, error.message);
       }
     }
   }
 
-  /**
-   * Genera firma HMAC-SHA256 para validar autenticidad
-   * 
-   * PROCESO:
-   * 1. Convierte el evento a JSON string
-   * 2. Firma con HMAC usando el secret compartido
-   * 3. Retorna hash en hexadecimal
-   */
   private generateSignature(event: WebhookEvent, secret: string): string {
     const payload = JSON.stringify(event);
     

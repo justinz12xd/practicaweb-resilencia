@@ -2,7 +2,7 @@ export interface AdoptionCompletedPayload{
     adoption_id: string;
     animal_id: string;
     adopter_name: string;
-    adopted_at: string;  // Cambiar de adoption_date a adopted_at
+    adopted_at: string;  
 }
 
 export interface AdoptionCompletedEvent{
