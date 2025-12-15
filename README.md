@@ -12,7 +12,6 @@ graph TB
     %% --- API GATEWAY ---
     subgraph GATEWAY ["🌐 ms-gateway :3000"]
         direction TB
-        GW_APP["AppModule"]
         GW_ANIMAL["AnimalModule<br/>POST /animals"]
         GW_ADOPT["AdoptionModule<br/>POST /adoptions"]
     end

@@ -10,12 +10,12 @@ export class AdoptionService {
       private readonly repo: Repository<Adoption>
     ) {}
 
-    async createAdoption(data) {
+    async createAdoption(data): Promise<Adoption> {
   const adoption = this.repo.create({
     animal_id: data.animal_id,
     adopter_name: data.adopter_name,
   });
-  await this.repo.save(adoption);
+  return await this.repo.save(adoption);
 }
 }
     
