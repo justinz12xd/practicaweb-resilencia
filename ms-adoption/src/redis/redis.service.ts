@@ -41,9 +41,6 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
-  /**
-   * Verifica si un message_id ya fue procesado
-   */
   async exists(messageId: string): Promise<boolean> {
     const key = `idempotency:${messageId}`;
     const exists = await this.client.exists(key);

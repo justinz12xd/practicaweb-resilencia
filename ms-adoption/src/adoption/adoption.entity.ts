@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
 
 @Entity('adoption')
 export class Adoption {
@@ -13,4 +13,7 @@ export class Adoption {
 
   @Column({ default: 'PENDING' })
   status: string;
+
+  @CreateDateColumn()
+  created_at: Date;
 }

@@ -1,0 +1,17 @@
+{
+  // Deshabilita Deno globalmente
+  "deno.enable": false,
+  
+  // Habilita Deno SOLO para Edge Functions
+  "deno.enablePaths": [
+    "./supabase/functions"
+  ],
+  
+  // Configuración para el resto del proyecto (Node.js)
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+}
