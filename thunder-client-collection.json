@@ -1,0 +1,269 @@
+{
+  "clientName": "Thunder Client",
+  "collectionName": "MCP + Gemini AI - Animal Adoption",
+  "collectionId": "mcp-animal-adoption",
+  "dateExported": "2026-01-06",
+  "version": "1.0",
+  "folders": [
+    {
+      "id": "folder-health",
+      "name": "01 - Health Checks",
+      "requests": []
+    },
+    {
+      "id": "folder-mcp",
+      "name": "02 - MCP Server (JSON-RPC)",
+      "requests": []
+    },
+    {
+      "id": "folder-gemini",
+      "name": "03 - Gemini AI (Natural Language)",
+      "requests": []
+    },
+    {
+      "id": "folder-legacy",
+      "name": "04 - Legacy REST API",
+      "requests": []
+    }
+  ],
+  "requests": [
+    {
+      "id": "req-health-mcp",
+      "folderId": "folder-health",
+      "name": "MCP Server Health",
+      "method": "GET",
+      "url": "http://localhost:3003/health",
+      "headers": [],
+      "body": {},
+      "tests": []
+    },
+    {
+      "id": "req-health-gateway",
+      "folderId": "folder-health",
+      "name": "Gateway Health",
+      "method": "GET",
+      "url": "http://localhost:3000",
+      "headers": [],
+      "body": {},
+      "tests": []
+    },
+    {
+      "id": "req-mcp-list-tools",
+      "folderId": "folder-mcp",
+      "name": "List Available Tools",
+      "method": "POST",
+      "url": "http://localhost:3003/",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"tools/list\",\n  \"id\": 1\n}"
+      },
+      "tests": []
+    },
+    {
+      "id": "req-mcp-search-animals",
+      "folderId": "folder-mcp",
+      "name": "Search Animals (Available)",
+      "method": "POST",
+      "url": "http://localhost:3003/",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"buscar_animal\",\n    \"arguments\": {\n      \"disponible\": true\n    }\n  },\n  \"id\": 2\n}"
+      },
+      "tests": []
+    },
+    {
+      "id": "req-mcp-search-by-name",
+      "folderId": "folder-mcp",
+      "name": "Search Animals by Name",
+      "method": "POST",
+      "url": "http://localhost:3003/",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"buscar_animal\",\n    \"arguments\": {\n      \"nombre\": \"Max\"\n    }\n  },\n  \"id\": 3\n}"
+      },
+      "tests": []
+    },
+    {
+      "id": "req-mcp-validate",
+      "folderId": "folder-mcp",
+      "name": "Validate Animal Availability",
+      "method": "POST",
+      "url": "http://localhost:3003/",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"validar_disponibilidad\",\n    \"arguments\": {\n      \"animal_id\": \"REPLACE-WITH-REAL-ID\"\n    }\n  },\n  \"id\": 4\n}"
+      },
+      "tests": []
+    },
+    {
+      "id": "req-mcp-create-adoption",
+      "folderId": "folder-mcp",
+      "name": "Create Adoption",
+      "method": "POST",
+      "url": "http://localhost:3003/",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"crear_adopcion\",\n    \"arguments\": {\n      \"animal_id\": \"REPLACE-WITH-REAL-ID\",\n      \"adopter_name\": \"Juan Pérez\",\n      \"adopter_email\": \"juan@example.com\"\n    }\n  },\n  \"id\": 5\n}"
+      },
+      "tests": []
+    },
+    {
+      "id": "req-ai-list-animals",
+      "folderId": "folder-gemini",
+      "name": "AI - List Available Animals",
+      "method": "POST",
+      "url": "http://localhost:3000/ai/chat",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"query\": \"Lista todos los animales disponibles para adopción\"\n}"
+      },
+      "tests": []
+    },
+    {
+      "id": "req-ai-search-specific",
+      "folderId": "folder-gemini",
+      "name": "AI - Search Specific Animal",
+      "method": "POST",
+      "url": "http://localhost:3000/ai/chat",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"query\": \"¿Hay algún perro llamado Max disponible?\"\n}"
+      },
+      "tests": []
+    },
+    {
+      "id": "req-ai-full-adoption",
+      "folderId": "folder-gemini",
+      "name": "AI - Complete Adoption Flow",
+      "method": "POST",
+      "url": "http://localhost:3000/ai/chat",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"query\": \"Quiero adoptar el perro Max para María García con email maria@example.com\"\n}"
+      },
+      "tests": []
+    },
+    {
+      "id": "req-ai-complex",
+      "folderId": "folder-gemini",
+      "name": "AI - Complex Multi-Step Query",
+      "method": "POST",
+      "url": "http://localhost:3000/ai/chat",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"query\": \"Busca gatos disponibles y si encuentras alguno, quiero adoptar uno para Pedro López con email pedro@example.com\"\n}"
+      },
+      "tests": []
+    },
+    {
+      "id": "req-ai-get-tools",
+      "folderId": "folder-gemini",
+      "name": "AI - Get Available Tools",
+      "method": "POST",
+      "url": "http://localhost:3000/ai/tools",
+      "headers": [],
+      "body": {},
+      "tests": []
+    },
+    {
+      "id": "req-legacy-create-animal",
+      "folderId": "folder-legacy",
+      "name": "Create Animal (REST)",
+      "method": "POST",
+      "url": "http://localhost:3000/animals",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"name\": \"Max\",\n  \"species\": \"Perro\"\n}"
+      },
+      "tests": []
+    },
+    {
+      "id": "req-legacy-create-adoption",
+      "folderId": "folder-legacy",
+      "name": "Create Adoption (REST)",
+      "method": "POST",
+      "url": "http://localhost:3000/adoptions",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"animal_id\": \"REPLACE-WITH-REAL-ID\",\n  \"adopter_name\": \"Juan Pérez\",\n  \"adopter_email\": \"juan@example.com\"\n}"
+      },
+      "tests": []
+    },
+    {
+      "id": "req-legacy-get-animals",
+      "folderId": "folder-legacy",
+      "name": "Get All Animals (REST)",
+      "method": "GET",
+      "url": "http://localhost:3001/animals",
+      "headers": [],
+      "body": {},
+      "tests": []
+    }
+  ]
+}
